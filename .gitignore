@@ -2,6 +2,9 @@
 android/build/
 *.idsig
 
+# 成品 APK 放在 Releases
+*.apk
+
 # 签名密钥不进仓库
 *.keystore
 
