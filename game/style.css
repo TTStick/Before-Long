@@ -85,15 +85,19 @@ body.flowing #topbar, body.photo #topbar, body.boarding #topbar { opacity: 0; po
 body.flowing #topbtns, body.boarding #topbtns, body.photo #topbtns { pointer-events: none; }
 #panel { height: 168px; overflow: hidden; transition: height .3s; position: relative; }
 #tray.fold #panel { height: 0; }
-.scroll { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 14px 14px 8px; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.scroll { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 14px 14px 8px; touch-action: pan-y; overscroll-behavior: contain; background: var(--paper); will-change: scroll-position; }
 .scroll::-webkit-scrollbar { display: none; }
 #tabs { display: flex; height: 62px; border-top: 1px solid var(--line); padding: 0 4px; }
 .tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11.5px; color: var(--ink2); transition: color .2s; }
 .tab svg { width: 24px; height: 24px; }
 .tab.on { color: var(--rose); }
 
-.hrow { display: flex; gap: 10px; overflow-x: auto; touch-action: pan-x; padding: 2px 2px 6px; margin: 0 -2px; }
+.hrow { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; touch-action: pan-x pan-y; overscroll-behavior-x: contain; padding: 7px 7px 8px; margin: -3px -7px 0; }
 .hrow::-webkit-scrollbar { display: none; }
+.bodyrow { display: flex; align-items: center; gap: 8px; height: 40px; font-size: 13px; }
+.bname { flex: none; width: 34px; }
+.bend { flex: none; min-width: 26px; text-align: center; font-size: 11.5px; color: var(--ink2); }
+.bodyrow input[type=range] { flex: 1; min-width: 0; height: 38px; touch-action: pan-y; }
 .lbl { font-size: 12.5px; color: var(--ink2); margin: 7px 2px 6px; letter-spacing: 1px; }
 .lbl:first-child { margin-top: 0; }
 

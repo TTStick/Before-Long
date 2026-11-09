@@ -265,9 +265,28 @@ const Art = (() => {
   // ---- 身体 ----
   const BODY_S = 0.7, BODY_X0 = -560, BODY_Y0 = 140, BODY_W = 1120, BODY_H = 2240;
 
+  // 身形由四个 0~1 的数决定，没有哪一格是“标准”
+  const BODY_DEFAULT = { shoulder: 0.5, waist: 0.62, hip: 0.5, build: 0.45 };
+
+  function bodyShape(look) {
+    const b = Object.assign({}, BODY_DEFAULT, look.body);
+    const fat = lerp(-14, 46, b.build);
+    const sx = lerp(172, 240, b.shoulder) + fat * 0.35;
+    const wx = lerp(118, 200, b.waist) + fat;
+    const hx = Math.max(lerp(165, 262, b.hip) + fat * 0.8, wx + 4);
+    const rx = lerp(sx * 0.86, wx, 0.35);
+    const hem = Math.min(hx * 1.72, 540);
+    const nw = lerp(48, 66, b.build) + lerp(-2, 8, b.shoulder);
+    const h0 = lerp(30, 56, b.build), h1 = lerp(24, 42, b.build);
+    const wristX = Math.max(sx + 34, hx + h1 * 0.9 + 6);
+    return { sx, wx, hx, rx, hem, nw, nl: nw + 30, h0, h1, wristX, shoulder: b.shoulder };
+  }
+
   function drawBody(look, cv) {
     const S = SKINS[look.skin];
     const O = OUTFITS[look.outfit];
+    const B = bodyShape(look);
+    const { sx, wx, hx, rx, hem, nw, nl, h0, h1, wristX } = B;
     cv = cv || mk(BODY_W * BODY_S, BODY_H * BODY_S);
     const c = cv.getContext('2d');
     c.setTransform(1, 0, 0, 1, 0, 0);
@@ -277,81 +296,88 @@ const Art = (() => {
     // 脖子和肩颈皮肤
     c.fillStyle = S.base;
     c.beginPath();
-    c.moveTo(-54, 140);
-    c.bezierCurveTo(-52, 210, -52, 248, -74, 276);
-    c.bezierCurveTo(-110, 300, -160, 306, -190, 340);
-    c.lineTo(190, 340);
-    c.bezierCurveTo(160, 306, 110, 300, 74, 276);
-    c.bezierCurveTo(52, 248, 52, 210, 54, 140);
+    c.moveTo(-nw, 140);
+    c.bezierCurveTo(-nw + 2, 210, -nw + 2, 248, -nw - 20, 276);
+    c.bezierCurveTo(-nw - 56, 300, -sx * 0.82, 306, -sx * 0.97, 340);
+    c.lineTo(sx * 0.97, 340);
+    c.bezierCurveTo(sx * 0.82, 306, nw + 56, 300, nw + 20, 276);
+    c.bezierCurveTo(nw - 2, 248, nw - 2, 210, nw, 140);
     c.closePath(); c.fill();
     // 后颈的一点阴影
     let g = c.createLinearGradient(0, 150, 0, 270);
     g.addColorStop(0, S.shade + 'c0'); g.addColorStop(1, S.shade + '00');
     c.fillStyle = g;
-    c.fillRect(-54, 150, 108, 120);
+    c.fillRect(-nw, 150, nw * 2, 120);
+
+    // 手臂的中线：从肩头垂下来，到手腕时贴着胯的外侧
+    const armPts = (s) => {
+      const P = [[sx - 10, 350 + h0 * 0.72], [sx + 18, 560], [lerp(sx + 22, wristX, 0.6), 830], [wristX, 1095]];
+      const out = [];
+      for (let i = 0; i <= 28; i++) {
+        const t = i / 28, m = 1 - t;
+        const x = m * m * m * P[0][0] + 3 * m * m * t * P[1][0] + 3 * m * t * t * P[2][0] + t * t * t * P[3][0];
+        const y = m * m * m * P[0][1] + 3 * m * m * t * P[1][1] + 3 * m * t * t * P[2][1] + t * t * t * P[3][1];
+        out.push([x, y, lerp(h0, h1, t)]);
+      }
+      return out.map((p) => [s * p[0], p[1], p[2]]);
+    };
 
     function hand(s) {
+      const cx = s * (wristX + 2), hw = h1 * 1.02;
       c.fillStyle = S.base;
-      c.beginPath();
-      c.moveTo(s * 232, 1090);
-      c.bezierCurveTo(s * 228, 1130, s * 232, 1176, s * 252, 1200);
-      c.bezierCurveTo(s * 272, 1212, s * 292, 1176, s * 290, 1130);
-      c.lineTo(s * 288, 1090);
-      c.closePath(); c.fill();
+      c.beginPath(); c.ellipse(cx, 1150, hw, 62, 0, 0, TAU); c.fill();
+      c.fillRect(cx - hw, 1088, hw * 2, 62);
     }
     hand(-1); hand(1);
 
-    // 手臂（衣袖）
+    function armFill(s, grow, col) {
+      const pts = armPts(s);
+      c.fillStyle = col;
+      c.beginPath();
+      pts.forEach((p, i) => { const x = p[0] + s * (p[2] + grow); if (i) c.lineTo(x, p[1]); else c.moveTo(x, p[1]); });
+      for (let i = pts.length - 1; i >= 0; i--) c.lineTo(pts[i][0] - s * (pts[i][2] + grow), pts[i][1]);
+      c.closePath(); c.fill();
+      c.beginPath(); c.arc(pts[0][0], pts[0][1], pts[0][2] + grow, 0, TAU); c.fill();
+    }
+
     function arm(s) {
-      c.fillStyle = O.shade + 'b0';
-      c.beginPath();
-      c.moveTo(s * 148, 322);
-      c.bezierCurveTo(s * 196, 322, s * 226, 352, s * 232, 412);
-      c.bezierCurveTo(s * 246, 590, s * 278, 840, s * 296, 1100);
-      c.lineTo(s * 226, 1104);
-      c.bezierCurveTo(s * 198, 880, s * 172, 650, s * 160, 450);
-      c.closePath(); c.fill();
-      c.fillStyle = O.base;
-      c.beginPath();
-      c.moveTo(s * 150, 326);
-      c.bezierCurveTo(s * 190, 328, s * 216, 360, s * 222, 416);
-      c.bezierCurveTo(s * 232, 590, s * 262, 840, s * 280, 1098);
-      c.lineTo(s * 232, 1102);
-      c.bezierCurveTo(s * 208, 880, s * 180, 650, s * 166, 440);
-      c.closePath(); c.fill();
+      armFill(s, 4, mixHex(O.base, O.shade, 0.6));
+      armFill(s, 0, O.base);
+      const pts = armPts(s), e = pts[pts.length - 1], q = pts[pts.length - 3];
+      const w = e[2] + 6;
       c.fillStyle = O.trim;
       c.beginPath();
-      c.moveTo(s * 226, 1076); c.lineTo(s * 296, 1072); c.lineTo(s * 298, 1104); c.lineTo(s * 226, 1108);
+      c.moveTo(q[0] - w, q[1]); c.lineTo(q[0] + w, q[1]); c.lineTo(e[0] + w, e[1] + 8); c.lineTo(e[0] - w, e[1] + 8);
       c.closePath(); c.fill();
     }
 
     // 裙身
-    function dress(path) {
+    function dress() {
       c.beginPath();
-      c.moveTo(-84, 288);
-      c.bezierCurveTo(-120, 302, -168, 312, -196, 346);
-      c.bezierCurveTo(-190, 430, -172, 530, -152, 640);
-      c.bezierCurveTo(-142, 720, -134, 790, -130, 850);
-      c.bezierCurveTo(-152, 930, -190, 1000, -206, 1080);
-      c.bezierCurveTo(-250, 1400, -320, 1800, -360, 2400);
-      c.lineTo(360, 2400);
-      c.bezierCurveTo(320, 1800, 250, 1400, 206, 1080);
-      c.bezierCurveTo(190, 1000, 152, 930, 130, 850);
-      c.bezierCurveTo(134, 790, 142, 720, 152, 640);
-      c.bezierCurveTo(172, 530, 190, 430, 196, 346);
-      c.bezierCurveTo(168, 312, 120, 302, 84, 288);
-      c.quadraticCurveTo(0, 326, -84, 288);
+      c.moveTo(-nl, 288);
+      c.bezierCurveTo(-nl - 36, 302, -sx * 0.857, 312, -sx, 346);
+      c.bezierCurveTo(-sx * 0.97, 430, -rx - 20, 530, -rx, 640);
+      c.bezierCurveTo(-lerp(rx, wx, 0.45), 720, -wx - 4, 790, -wx, 850);
+      c.bezierCurveTo(-lerp(wx, hx, 0.35), 930, -lerp(wx, hx, 0.8), 1000, -hx, 1080);
+      c.bezierCurveTo(-hx * 1.2, 1400, -hx * 1.55, 1800, -hem, 2400);
+      c.lineTo(hem, 2400);
+      c.bezierCurveTo(hx * 1.55, 1800, hx * 1.2, 1400, hx, 1080);
+      c.bezierCurveTo(lerp(wx, hx, 0.8), 1000, lerp(wx, hx, 0.35), 930, wx, 850);
+      c.bezierCurveTo(wx + 4, 790, lerp(rx, wx, 0.45), 720, rx, 640);
+      c.bezierCurveTo(rx + 20, 530, sx * 0.97, 430, sx, 346);
+      c.bezierCurveTo(sx * 0.857, 312, nl + 36, 302, nl, 288);
+      c.quadraticCurveTo(0, 326, -nl, 288);
       c.closePath();
-      if (path) return;
     }
-    dress(true);
+    dress();
     c.fillStyle = O.base; c.fill();
     c.save();
-    dress(true); c.clip();
+    dress(); c.clip();
 
     if (O.pat === 'knit') {
       c.strokeStyle = O.shade + '70'; c.lineWidth = 3;
-      for (let x = -360; x <= 360; x += 15) {
+      const span = hem / 1.04 + 15;
+      for (let x = -span; x <= span; x += 15) {
         c.beginPath();
         c.moveTo(x * 0.6, 280);
         c.quadraticCurveTo(x * 0.62, 900, x * 1.04, 2400);
@@ -359,8 +385,8 @@ const Art = (() => {
       }
     } else if (O.pat === 'flower') {
       const r = hashRand(77);
-      for (let i = 0; i < 300; i++) {
-        const x = lerp(-360, 360, r()), y = lerp(290, 2400, r());
+      for (let i = 0; i < 420; i++) {
+        const x = lerp(-hem, hem, r()), y = lerp(290, 2400, r());
         c.save();
         c.translate(x, y);
         c.fillStyle = r() < 0.5 ? '#FBF3E6dd' : '#F3C9CFdd';
@@ -373,34 +399,39 @@ const Art = (() => {
       }
     }
     // 明暗
-    g = c.createLinearGradient(-230, 0, 230, 0);
+    const side = Math.max(sx, hx) + 24;
+    g = c.createLinearGradient(-side, 0, side, 0);
     g.addColorStop(0, O.deep + '90'); g.addColorStop(0.2, O.deep + '00');
     g.addColorStop(0.8, O.deep + '00'); g.addColorStop(1, O.deep + '90');
-    c.fillStyle = g; c.fillRect(-400, 280, 800, 2200);
+    c.fillStyle = g; c.fillRect(-560, 280, 1120, 2200);
 
+    // 腰越直，腰线的阴影越淡
+    const curve = clamp((hx - wx) / 90, 0, 1);
+    const waistA = Math.round(curve * 54).toString(16).padStart(2, '0');
     g = c.createLinearGradient(0, 800, 0, 900);
-    g.addColorStop(0, O.deep + '00'); g.addColorStop(0.55, O.deep + '36'); g.addColorStop(1, O.deep + '00');
-    c.fillStyle = g; c.fillRect(-300, 800, 600, 100);
+    g.addColorStop(0, O.deep + '00'); g.addColorStop(0.55, O.deep + waistA); g.addColorStop(1, O.deep + '00');
+    c.fillStyle = g; c.fillRect(-560, 800, 1120, 100);
 
+    const fold = hx / 206;
     c.strokeStyle = O.deep + '55'; c.lineCap = 'round'; c.lineWidth = 8;
     for (const x of [-96, -30, 44, 112]) {
       c.beginPath();
-      c.moveTo(x * 0.78, 900);
-      c.bezierCurveTo(x * 0.96, 1300, x * 1.2, 1800, x * 1.42, 2400);
+      c.moveTo(x * 0.78 * fold, 900);
+      c.bezierCurveTo(x * 0.96 * fold, 1300, x * 1.2 * fold, 1800, x * 1.42 * fold, 2400);
       c.stroke();
     }
     c.restore();
 
     // 领口
     c.strokeStyle = O.trim; c.lineWidth = 20;
-    c.beginPath(); c.moveTo(-84, 288); c.quadraticCurveTo(0, 326, 84, 288); c.stroke();
+    c.beginPath(); c.moveTo(-nl, 288); c.quadraticCurveTo(0, 326, nl, 288); c.stroke();
     c.strokeStyle = O.shade; c.lineWidth = 2.5;
-    c.beginPath(); c.moveTo(-96, 300); c.quadraticCurveTo(0, 344, 96, 300); c.stroke();
+    c.beginPath(); c.moveTo(-nl - 12, 300); c.quadraticCurveTo(0, 344, nl + 12, 300); c.stroke();
     if (O.pat === 'lace') {
       c.fillStyle = O.trim;
       for (let i = 0; i <= 14; i++) {
         const t = i / 14;
-        const x = lerp(-90, 90, t);
+        const x = lerp(-nl - 6, nl + 6, t);
         const y = (1 - t) * (1 - t) * 300 + 2 * (1 - t) * t * 340 + t * t * 300;
         c.beginPath(); c.arc(x, y, 8.5, 0, TAU); c.fill();
       }
@@ -419,7 +450,6 @@ const Art = (() => {
     arm(-1); arm(1);
     return cv;
   }
-
 
   // ---- 后脑勺：只有耳朵和一点皮肤，其余都被头发盖住 ----
   function drawHeadBack(look, cv) {
@@ -441,9 +471,12 @@ const Art = (() => {
       c.beginPath(); c.moveTo(152, 24); c.bezierCurveTo(172, 18, 178, 48, 166, 70); c.stroke();
       c.restore();
     }
+    // 只留后颈这一小段皮肤，上面全由头发盖住
+    c.save();
+    c.beginPath(); c.rect(-200, 40, 400, 200); c.clip();
     facePath(c);
     c.fillStyle = S.base; c.fill();
-    c.save(); facePath(c); c.clip();
+    facePath(c); c.clip();
     const g = c.createLinearGradient(0, 110, 0, 205);
     g.addColorStop(0, S.shade + '00'); g.addColorStop(1, S.shade + 'b0');
     c.fillStyle = g; c.fillRect(-200, 100, 400, 110);
@@ -545,9 +578,10 @@ const Art = (() => {
     c.fillStyle = S.base; c.fillRect(cx - 27, hy + 80, 54, 60);
     c.fillStyle = O.base;
     c.beginPath();
-    c.moveTo(cx - 124, H); c.quadraticCurveTo(cx - 112, hy + 142, cx - 38, hy + 128);
+    const sm = lerp(0.84, 1.18, bodyShape(look).shoulder);
+    c.moveTo(cx - 124 * sm, H); c.quadraticCurveTo(cx - 112 * sm, hy + 142, cx - 38, hy + 128);
     c.quadraticCurveTo(cx, hy + 152, cx + 38, hy + 128);
-    c.quadraticCurveTo(cx + 112, hy + 142, cx + 124, H); c.closePath(); c.fill();
+    c.quadraticCurveTo(cx + 112 * sm, hy + 142, cx + 124 * sm, H); c.closePath(); c.fill();
     c.drawImage(faceCv, cx + HEAD_X0 * hs, hy + HEAD_Y0 * hs, HEAD_W * hs, HEAD_H * hs);
 
     // 前面的头发和刘海
@@ -1075,7 +1109,7 @@ const Art = (() => {
 
   return {
     SKINS, EYES, LIPS, OUTFITS, ROOM, TIE_COLORS, TIE_PATTERNS, TIE_TYPES, ACC,
-    drawHeadBase, drawHeadBack, drawFeatures, drawBody, drawRoom, drawTie, drawAcc, drawParticle, drawHand, drawMirror, drawPartLine, HAND_POSE, mk,
+    drawHeadBase, drawHeadBack, drawFeatures, drawBody, drawRoom, drawTie, drawAcc, drawParticle, drawHand, drawMirror, drawPartLine, HAND_POSE, BODY_DEFAULT, mk,
     HEAD: { S: HEAD_S, X0: HEAD_X0, Y0: HEAD_Y0, W: HEAD_W, H: HEAD_H },
     FEAT: { S: FEAT_S, X0: FEAT_X0, Y0: FEAT_Y0, W: FEAT_W, H: FEAT_H },
     BODY: { S: BODY_S, X0: BODY_X0, Y0: BODY_Y0, W: BODY_W, H: BODY_H },

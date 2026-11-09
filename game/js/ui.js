@@ -49,15 +49,24 @@ const UI = (() => {
     $('tabs').innerHTML = TABS.map((t) => `<button class="tab${t.id === tab ? ' on' : ''}" data-t="${t.id}">${t.i}<span>${t.n}</span></button>`).join('');
   }
 
+  // 小图只画一次，重画面板时直接拿来用
   const accThumbs = {};
   function accThumb(id) {
     if (!accThumbs[id]) {
-      const c = Art.drawAcc(id);
-      accThumbs[id] = c;
+      const cv = Art.mk(96, 96);
+      cv.getContext('2d').drawImage(Art.drawAcc(id), 0, 0, 96, 96);
+      accThumbs[id] = cv;
     }
-    const cv = Art.mk(96, 96);
-    cv.getContext('2d').drawImage(accThumbs[id], 0, 0, 96, 96);
-    return cv;
+    return accThumbs[id];
+  }
+  const tieThumbs = new Map();
+  function tieThumb(t) {
+    const key = `${t.type}-${t.color}-${t.pattern}`;
+    if (!tieThumbs.has(key)) {
+      if (tieThumbs.size > 40) tieThumbs.clear();
+      tieThumbs.set(key, Art.drawTie(t));
+    }
+    return tieThumbs.get(key);
   }
 
   const panels = {
@@ -114,6 +123,8 @@ const UI = (() => {
     me() {
       const L = Store.data.look, S = Store.data.settings;
       return `<div class="scroll">
+        <div class="lbl">身形：调成你觉得像自己的样子就好</div>${bodyRows()}
+        <div class="hrow"><button class="chip" data-body-reset="1">恢复默认</button></div>
         <div class="lbl">房间</div><div class="hrow">${Object.keys(Art.ROOM).map((k) => `<button class="chip${L.room === k ? ' on' : ''}" data-room="${k}">${Art.ROOM[k].n}</button>`).join('')}</div>
         <div class="lbl">肤色</div><div class="hrow">${Art.SKINS.map((s, i) => `<button class="sw${L.skin === i ? ' on' : ''}" style="background:${s.base}" data-skin="${i}"></button>`).join('')}</div>
         <div class="lbl">瞳色</div><div class="hrow">${Art.EYES.map((s, i) => `<button class="sw${L.eye === i ? ' on' : ''}" style="background:radial-gradient(circle at 50% 70%,${s.c},${s.b} 45%,${s.a})" data-eye="${i}"></button>`).join('')}</div>
@@ -127,25 +138,42 @@ const UI = (() => {
     },
   };
 
+  const BODY_ROWS = [['shoulder', '肩膀', '窄', '宽'], ['waist', '腰', '收', '直'], ['hip', '胯', '窄', '宽'], ['build', '整体', '清瘦', '圆润']];
+  function bodyRows() {
+    const b = Object.assign({}, Art.BODY_DEFAULT, Store.data.look.body);
+    return BODY_ROWS.map(([k, n, a, z]) => `<div class="bodyrow"><span class="bname">${n}</span><span class="bend">${a}</span><input type="range" min="0" max="1" step="0.02" value="${b[k]}" data-body="${k}" aria-label="${n}"><span class="bend">${z}</span></div>`).join('');
+  }
+
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
   function renderPanel() {
-    $('panel').innerHTML = panels[tab]();
+    // 点选之后面板要留在原来的位置，不能跳回顶部
+    const box = $('panel');
+    const old = box.querySelector('.scroll');
+    const keep = old && box.dataset.tab === tab
+      ? { top: old.scrollTop, rows: [...old.querySelectorAll('.hrow')].map((r) => r.scrollLeft) }
+      : null;
+    box.innerHTML = panels[tab]();
+    box.dataset.tab = tab;
     if (tab === 'tie') {
-      const box = $('tieTypes');
+      const types = $('tieTypes');
       Art.TIE_TYPES.forEach((t) => {
         const b = document.createElement('button');
         b.className = 'card tie-prev' + (Store.data.tie.type === t.id ? ' on' : '');
         b.dataset.tiet = t.id;
         b.style.width = '76px';
-        const cv = Art.drawTie(Object.assign({}, Store.data.tie, { type: t.id }));
-        b.appendChild(cv);
+        b.appendChild(tieThumb(Object.assign({}, Store.data.tie, { type: t.id })));
         const sp = document.createElement('span'); sp.textContent = t.n; b.appendChild(sp);
-        box.appendChild(b);
+        types.appendChild(b);
       });
     }
     if (tab === 'acc') {
       document.querySelectorAll('[data-th]').forEach((el) => el.replaceWith(accThumb(el.dataset.th)));
+    }
+    if (keep) {
+      const sc = box.querySelector('.scroll');
+      sc.scrollTop = keep.top;
+      sc.querySelectorAll('.hrow').forEach((r, i) => { r.scrollLeft = keep.rows[i] || 0; });
     }
   }
 
@@ -220,6 +248,15 @@ const UI = (() => {
       if (b) setTab(b.dataset.t);
     });
     $('panel').addEventListener('click', onPanel);
+    // 滑动面板时，头发那边先歇一下，把性能让给滚动
+    $('panel').addEventListener('scroll', () => Game.uiBusy(), { capture: true, passive: true });
+    $('panel').addEventListener('touchmove', (e) => { if (e.target.type !== 'range') Game.uiBusy(); }, { passive: true });
+    $('panel').addEventListener('input', (e) => {
+      const k = e.target.dataset && e.target.dataset.body;
+      if (!k) return;
+      Store.data.look.body[k] = +e.target.value;
+      Game.applyBody();
+    });
     $('btnSound').onclick = () => {
       const s = Store.data.settings;
       const on = s.music || s.sfx;
@@ -260,6 +297,7 @@ const UI = (() => {
       if (d.tip) { c[4] = d.tip; c[3] = d.tip; c[2] = mixHex(c[0], d.tip, 0.5); }
       S.hair.custom = c; S.hair.dye = 'custom'; Game.applyDye(); renderPanel(); return;
     }
+    if (d.bodyReset) { S.look.body = Object.assign({}, Art.BODY_DEFAULT); Game.applyBody(); renderPanel(); return; }
     if (d.room) { S.look.room = d.room; Game.applyRoom(); Store.saveSoon(); renderPanel(); return; }
     if (d.skin !== undefined) { S.look.skin = +d.skin; Game.applyLook(); renderPanel(); return; }
     if (d.eye !== undefined) { S.look.eye = +d.eye; Game.applyLook(); renderPanel(); return; }

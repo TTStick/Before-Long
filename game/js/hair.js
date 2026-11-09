@@ -152,7 +152,7 @@ const Hair = (() => {
     fam('mid', 20, 54, 0.5);
     fam('top', 26, 46, 0.94);
     for (let i = 0; i < 6; i++) {
-      locks.push(makeLock('wisp', { s: lerp(-1, 1, i / 5), W: 7, alpha: 0, alphaT: 0 }));
+      locks.push(makeLock('wisp', { s: lerp(-1, 1, i / 5), W: 2.4, alpha: 0, alphaT: 0 }));
     }
     dirty = true;
     rebuild(true);
@@ -187,10 +187,10 @@ const Hair = (() => {
       // 把头发扎起来以后，后颈上留的几根小碎发
       const bx = l.s * 62;
       const by = 130 - Math.abs(l.s) * 12;
-      const len = 26 + (l.seed * 22);
+      const len = 24 + (l.seed * 24);
       for (let i = 0; i < N; i++) {
         const t = i / (N - 1);
-        x[i] = bx + Math.sin(t * 2.6 + l.phase) * 7 * t + l.s * 8 * t;
+        x[i] = bx + Math.sin(t * 3.2 + l.phase) * 9 * t + l.s * 12 * t;
         y[i] = by + len * t;
       }
       return;
@@ -246,7 +246,10 @@ const Hair = (() => {
     const def = T.def;
     const x = l.bx, y = l.by;
     const abS = Math.abs(l.s);
-    const perim = (a) => [158 * Math.sin(a), -12 + 150 * Math.cos(a)];
+    const perim = (a) => {
+      const c = Math.cos(a);
+      return [172 * Math.sin(a), -12 + (c >= 0 ? 150 : 204) * c];
+    };
 
     if (def.root === 'radial') {
       const r = def.range || [0, 3.0];
@@ -267,9 +270,10 @@ const Hair = (() => {
     }
 
     // 自由段：从发圈往下
+    // 从头顶沿着后脑勺走到发圈，这段长度已经用掉了，马尾不会比披发还长
     const L0 = totalLen(l);
-    const used = pathLen(x, y, 0, NP - 1);
-    let Lt = Math.max(L0 - used * 0.55, 46);
+    const consumed = T.y >= 0 ? 330 + T.y : 210 * Math.acos(clamp(-T.y / 214, -1, 1));
+    let Lt = Math.max(L0 - consumed, 46);
     if (def.tailMax) Lt = Math.min(Lt, def.tailMax);
     if (T.kind === 'bun') Lt = Math.max(Lt * (1 - T.progress), 6);
     l.tailLen = Lt;
@@ -602,7 +606,7 @@ const Hair = (() => {
       if (!l.active) continue;
       const e = easeInOut(l.w);
       const { x, y, ox, oy, rx, ry, k, seg, cum, ax, ay, bx, by, nx, ny } = l;
-      const tg = l.tangle;
+      const tg = l.tangle * (1 - 0.88 * e);
       for (let i = 0; i < N; i++) {
         const tx = lerp(ax[i], bx[i], e) + tg * nx[i];
         const ty = lerp(ay[i], by[i], e) + tg * ny[i];
@@ -688,7 +692,9 @@ const Hair = (() => {
       const v = clamp(sc[i] / opt.total, 0, 1);
       const q = i / (m - 1);
       let w = W;
-      if (opt.spindle) {
+      if (opt.ellipse) {
+        w *= Math.sqrt(Math.max(0.002, 1 - (2 * q - 1) * (2 * q - 1)));
+      } else if (opt.spindle) {
         w *= Math.pow(Math.sin(Math.PI * clamp(q, 0.001, 0.999)), 0.55);
       } else {
         w *= lerp(opt.rootW, 1, sstep(0, 0.1, v));
@@ -699,8 +705,9 @@ const Hair = (() => {
       w = Math.max(w, 0.2);
       const nx = -ty, ny = tx;
       const ly = sy[i] - hy;
-      const a = G.hairVert(sx[i] + nx * w, sy[i] + ny * w, -1, v, opt.seed, opt.shade, ly, opt.alpha, opt.streak, W);
-      const b = G.hairVert(sx[i] - nx * w, sy[i] - ny * w, 1, v, opt.seed, opt.shade, ly, opt.alpha, opt.streak, W);
+      const al = opt.rootFade > 0 ? opt.alpha * sstep(0, opt.rootFade, q) : opt.alpha;
+      const a = G.hairVert(sx[i] + nx * w, sy[i] + ny * w, -1, v, opt.seed, opt.shade, ly, al, opt.streak, W);
+      const b = G.hairVert(sx[i] - nx * w, sy[i] - ny * w, 1, v, opt.seed, opt.shade, ly, al, opt.streak, W);
       if (prevA >= 0) {
         G.hairTri(prevA, prevB, a);
         G.hairTri(prevB, b, a);
@@ -710,7 +717,7 @@ const Hair = (() => {
   }
 
   const ranges = [0, 0, 0, 0];
-  const opt = { seed: 0, shade: 1, total: 1, alpha: 1, streak: 0, rootW: 0.5, tipTaper: true, spindle: false, tipLen: 0.42, endW: 1, startTaper: false };
+  const opt = { seed: 0, shade: 1, total: 1, alpha: 1, streak: 0, rootW: 0.5, tipTaper: true, spindle: false, tipLen: 0.42, endW: 1, startTaper: false, ellipse: false, rootFade: 0 };
 
   function emitLock(l, layer, sub) {
     const a = layerFor(l), pinL = a[0], freeL = a[1];
@@ -720,7 +727,7 @@ const Hair = (() => {
     opt.alpha = l.alpha;
     opt.streak = l.streakOn ? 1 : 0;
     opt.shade = l.shade * (l.fam === 'under' ? 0.85 : l.fam === 'mid' ? 0.93 : 1);
-    opt.spindle = false; opt.tipLen = 0.42; opt.endW = 1; opt.startTaper = false;
+    opt.spindle = false; opt.tipLen = 0.42; opt.endW = 1; opt.startTaper = false; opt.ellipse = false; opt.rootFade = 0;
     const W = l.W;
     const T = l.tie >= 0 ? ties[l.tie] : null;
     const styled = T && l.w > 0.5;
@@ -728,8 +735,9 @@ const Hair = (() => {
 
     if (styled) {
       if (layer === pinL) {
-        opt.tipTaper = false; opt.rootW = 0.3; opt.endW = 0.26;
+        opt.tipTaper = false; opt.rootW = 0.75; opt.endW = 0.26; opt.rootFade = 0.26;
         ribbon(catmull(l.x, l.y, l.cum, 0, NP - 1, sub), W, opt);
+        opt.rootFade = 0;
       }
       if (layer === freeL && !(T.kind === 'bun' && T.progress > 0.985)) {
         opt.tipTaper = true; opt.rootW = 1; opt.endW = 1;
@@ -748,17 +756,18 @@ const Hair = (() => {
   // 整个后脑勺先铺一层深色的底，发缕之间就不会露出空隙
   function emitCap() {
     const ca = Math.cos(head.a), sa = Math.sin(head.a);
-    const yBot = H.style === 'loose' ? Math.min(140, hemY() + 8) : 140;
-    const m = 18;
+    const styled = H.style !== 'loose';
+    const yBot = styled ? 142 : Math.min(140, hemY() + 8);
+    const m = 26;
     for (let i = 0; i < m; i++) {
       const t = i / (m - 1);
-      const ly = lerp(-224, yBot, t);
+      const ly = lerp(-226, yBot, t);
       sx[i] = head.x - ly * sa; sy[i] = head.y + ly * ca; sc[i] = 0.06;
     }
-    opt.seed = 0.31; opt.shade = 0.72; opt.total = 1; opt.alpha = 1; opt.streak = 0;
-    opt.spindle = true; opt.tipTaper = false; opt.endW = 1; opt.startTaper = false;
-    ribbon(m, 178, opt);
-    opt.spindle = false;
+    opt.seed = 0.31; opt.shade = styled ? 0.9 : 0.72; opt.total = 1; opt.alpha = 1; opt.streak = 0;
+    opt.spindle = false; opt.ellipse = true; opt.tipTaper = false; opt.endW = 1; opt.startTaper = false; opt.rootFade = 0;
+    ribbon(m, 180, opt);
+    opt.ellipse = false;
   }
 
   function emitBun(T, tIndex) {
@@ -832,6 +841,17 @@ const Hair = (() => {
     G.hairUpload();
   }
 
+  // 现在这个发型最低能到哪里，镜头要把它框进去
+  function contentBottom() {
+    let b = 300;
+    for (const l of locks) {
+      if (!l.active || l.fam === 'wisp' || l.bundle >= 0) continue;
+      b = Math.max(b, lerp(l.ay[N - 1], l.by[N - 1], easeInOut(l.wT)));
+    }
+    ties.forEach((T) => { if (T.braid) b = Math.max(b, T.y + Math.max(T.braid.L0, T.braid.max * T.braid.ell)); });
+    return b;
+  }
+
   function tiePos(T) {
     const ca = Math.cos(head.a), sa = Math.sin(head.a);
     return { x: head.x + T.x * ca - T.y * sa, y: head.y + T.x * sa + T.y * ca };
@@ -862,7 +882,7 @@ const Hair = (() => {
     gatherAt, finishGather, gatherProgress, push, comb, tangleAvg, setTangle, shake,
     grabStart, grabMove, grabSpin, grabEnd, clearCurls,
     isGrabbing: () => !!grab, isTwirling: () => !!grab && grab.twirl > 0.02,
-    step, emit, ranges, tiePos, nearestPoint, totalLen, ribbon, sx, sy, sc,
+    step, emit, ranges, tiePos, nearestPoint, totalLen, contentBottom, ribbon, sx, sy, sc,
     get ties() { return ties; },
     get locks() { return locks; },
     get styleDef() { return styleDef; },

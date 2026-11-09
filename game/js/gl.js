@@ -22,7 +22,7 @@ varying vec2 vUV; varying vec4 vE; varying vec3 vCol; varying vec2 vS;
 uniform vec3 uLight; uniform vec3 uStreak; uniform float uShine; uniform float uShadow;
 void main(){
   float au=abs(vUV.x);
-  float a=smoothstep(1.,.74,au)*vE.w;
+  float a=smoothstep(1.,clamp(1.-12./max(vS.y,1.),.4,.95),au)*vE.w;
   if(uShadow>.5){
     float s=a*.085;
     gl_FragColor=vec4(.32*s,.16*s,.20*s,s);

@@ -78,7 +78,7 @@ const Store = {
       name: '',
       real: { cm: 15, date: null, goalCm: 72 },
       settings: { music: true, sfx: true, haptics: true },
-      look: { skin: 1, eye: 0, eyeShape: 0, lip: 0, outfit: 0, freckle: false, mole: false, room: 'morning' },
+      look: { skin: 1, eye: 0, eyeShape: 0, lip: 0, outfit: 0, freckle: false, mole: false, room: 'morning', body: { shoulder: 0.5, waist: 0.62, hip: 0.5, build: 0.45 } },
       hair: {
         tipY: 200, wave: 0, part: 0, bang: 'air',
         dye: 'tea', custom: null, streak: null,

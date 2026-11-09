@@ -16,6 +16,7 @@ const Game = (() => {
   let glowT = 0;
   let brushLevel = 0, brushHold = 0, lastTick = 0;
   let timeState = null;
+  let uiBusyUntil = 0;
   const tweens = [];
 
   const NEED = { tail: 150, bun: 300, braid: 320, half: 110 };
@@ -57,6 +58,14 @@ const Game = (() => {
     Store.saveSoon();
   }
   function applyLook() { Scene.bakeLook(S().look); Store.saveSoon(); }
+  // 拖动滑条时不用每一格都重画，稍微攒一下
+  let bodyTimer = null, mirrorTimer = null;
+  function applyBody() {
+    if (!bodyTimer) bodyTimer = setTimeout(() => { bodyTimer = null; Scene.bakeBody(S().look); }, 70);
+    clearTimeout(mirrorTimer);
+    mirrorTimer = setTimeout(() => Scene.bakeMirror(), 220);
+    Store.saveSoon();
+  }
   function applyTie() { Scene.bakeTie(S().tie); Store.saveSoon(); }
   function applyRoom() {
     const r = S().look.room;
@@ -109,9 +118,9 @@ const Game = (() => {
       return;
     }
     let top = hairTopY();
-    let bot = Math.max(640, Hair.H.tipYT + 90);
-    const tailSt = Hair.styleDef && Hair.styleDef.kind !== 'loose';
-    if (tailSt) bot = Math.max(640, Math.min(bot, 980));
+    const loose = !Hair.styleDef || Hair.styleDef.kind === 'loose';
+    const reach = loose ? Hair.H.tipYT + clamp(Hair.H.tipYT * 0.14, 60, 130) : Hair.contentBottom() + 70;
+    let bot = Math.max(640, reach);
     camT.z = Math.min(regH / (bot - top), W / 720);
     camT.x = 0;
     camT.y = (top + bot) / 2;
@@ -231,7 +240,7 @@ const Game = (() => {
     document.body.classList.remove('braiding');
     Snd.pop();
     flow.wrapA = null; flow.wrapSum = 0;
-    UI.prompt('手指绕着发圈打圈，绕三圈', 0, true);
+    UI.prompt('手指打圈，把发圈绕三圈（点三下也行）', 0, true);
     requestLayout();
   }
 
@@ -548,36 +557,20 @@ const Game = (() => {
       return;
     }
     if (mode === 'coil') {
-      const T = flow.T;
-      const q = Hair.tiePos(T);
-      const a = Math.atan2(w.y - q.y - T.def.by * T.progress, w.x - q.x - T.def.bx * T.progress);
-      if (flow.coilA !== null) {
-        let da = a - flow.coilA;
-        while (da > Math.PI) da -= TAU;
-        while (da < -Math.PI) da += TAU;
-        coilAdd(Math.abs(da) / (TAU * 2.4));
-      }
-      flow.coilA = a;
+      coilAdd(Math.abs(Circle.add(e.clientX, e.clientY)) / (TAU * 2.4));
       Hair.push(w.x, w.y, dx, dy, 120);
       return;
     }
     if (mode === 'wrap') {
-      const p = wrapPoint(flow.T);
-      const a = Math.atan2(w.y - p.y, w.x - p.x);
-      if (flow.wrapA !== null) {
-        let da = a - flow.wrapA;
-        while (da > Math.PI) da -= TAU;
-        while (da < -Math.PI) da += TAU;
+      const da = Circle.add(e.clientX, e.clientY);
+      if (da !== 0) {
         flow.wrapSum += da;
         flow.T.pop = Math.max(flow.T.pop, 0.25);
         if (Math.abs(flow.wrapSum) >= TAU * 0.85) {
           flow.wrapSum = 0;
-          ptr.moved = 99;
           doWrap();
-          if (!flow || mode !== 'wrap') return;
         }
       }
-      flow.wrapA = a;
       return;
     }
     if (mode === 'braid') {
@@ -1003,6 +996,7 @@ const Game = (() => {
   function frame(now) {
     requestAnimationFrame(frame);
     if (paused) { last = now; return; }
+    if (now < uiBusyUntil && !ptr) { last = now; return; }
     const dt = Math.min(0.05, (now - (last || now)) / 1000);
     last = now;
 
@@ -1131,8 +1125,9 @@ const Game = (() => {
     get tool() { return tool; }, get mode() { return mode; }, get flow() { return flow; },
     get selectedAcc() { return selectedAcc; }, cam, camT,
     setTool, startStyle, cancelFlow, autoFinish, addAcc, accAction,
-    applyDye, applyLook, applyTie, applyRoom, requestLayout, updateGreet,
+    applyDye, applyLook, applyBody, applyTie, applyRoom, requestLayout, updateGreet,
     takePhoto, openTime, restorePhoto, enterGame, setLength,
+    uiBusy() { uiBusyUntil = performance.now() + 180; },
     _combedOnce: false, _twirlShown: false,
   };
 

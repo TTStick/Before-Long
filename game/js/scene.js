@@ -74,6 +74,11 @@ const Scene = (() => {
     bakeMirror();
   }
 
+  function bakeBody(look) {
+    Cvs.body = Art.drawBody(look, Cvs.body);
+    if (Tex.body) G.updateTex(Tex.body, Cvs.body); else Tex.body = G.tex(Cvs.body);
+  }
+
   function bakeTie(t) {
     G.freeTex(Tex.tie);
     G.freeTex(Tex.bow);
@@ -297,7 +302,7 @@ const Scene = (() => {
   }
 
   return {
-    DYES, Tex, face, accs, MIRROR, setDye, setStreak, bakeLook, bakeMirror, bakeTie, setRoom, initTextures,
+    DYES, Tex, face, accs, MIRROR, setDye, setStreak, bakeLook, bakeBody, bakeMirror, bakeTie, setRoom, initTextures,
     handShow, handMove, handPose, handHide, tieDrawPoint,
     spawn, sparkleAt, hearts, ambient, updateParticles, updateFace, expression, draw, accWorld,
     get room() { return room; },
