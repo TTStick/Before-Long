@@ -1,0 +1,10 @@
+# 构建中间文件
+android/build/
+*.idsig
+
+# 签名密钥不进仓库
+*.keystore
+
+# 本机开发配置
+.claude/
+.DS_Store
